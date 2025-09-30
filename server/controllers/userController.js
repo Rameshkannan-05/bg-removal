@@ -1,31 +1,30 @@
 import { Webhook } from "svix";
 import userModel from "../models/userModel.js";
 
-// API Controller Function to Manage Clerk User with database
-// Webhook URL: /api/user/webhooks
-
+// Clerk Webhook Controller
 const clerkWebhooks = async (req, res) => {
   try {
-    // 1️⃣ Log that webhook hit the backend
     console.log("✅ Webhook received! Headers:", req.headers);
-    console.log("✅ Webhook raw body:", req.body.toString());
+    console.log("✅ Webhook raw body:", req.body);
 
-    // 2️⃣ Verify the webhook using Svix
     const whook = new Webhook(process.env.CLERK_WEBHOOK_SECRET);
+
+    // Ensure body is Buffer (Vercel may parse as Object)
     const rawBody = Buffer.isBuffer(req.body)
       ? req.body
       : Buffer.from(JSON.stringify(req.body));
 
+    // Verify the webhook
     const evt = await whook.verify(rawBody, {
       "svix-id": req.headers["svix-id"],
       "svix-timestamp": req.headers["svix-timestamp"],
       "svix-signature": req.headers["svix-signature"],
     });
+
     console.log("✅ Webhook verified! Event type:", evt.type);
 
     const { data, type } = evt;
 
-    // 3️⃣ Handle different event types
     switch (type) {
       case "user.created": {
         const userData = {
@@ -37,9 +36,8 @@ const clerkWebhooks = async (req, res) => {
         };
         const user = await userModel.create(userData);
         console.log("✅ User created in MongoDB:", user);
-        return res.json({});
+        break;
       }
-
       case "user.updated": {
         const userData = {
           email: data.email_addresses[0].email_address,
@@ -47,32 +45,28 @@ const clerkWebhooks = async (req, res) => {
           firstName: data.first_name,
           lastName: data.last_name,
         };
-        const user = await userModel.findOneAndUpdate(
-          { clerkId: data.id },
-          userData,
-          { new: true }
-        );
-        console.log("🔄 User updated in MongoDB:", user);
-        return res.json({});
+        await userModel.findOneAndUpdate({ clerkId: data.id }, userData);
+        console.log("✅ User updated in MongoDB");
+        break;
       }
-
       case "user.deleted": {
-        const user = await userModel.findOneAndDelete({ clerkId: data.id });
-        console.log("❌ User deleted in MongoDB:", user);
-        return res.json({});
+        await userModel.findOneAndDelete({ clerkId: data.id });
+        console.log("✅ User deleted from MongoDB");
+        break;
       }
-
       default:
-        console.log("⚠️ Unhandled event type:", type);
-        return res.json({});
+        console.log("ℹ️ Event type not handled:", type);
+        break;
     }
+
+    res.json({ success: true });
   } catch (error) {
     console.log("❌ Webhook error:", error.message);
-    return res.status(400).json({ success: false, message: error.message });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
-// API controller function to get user available credits data
+// API controller to get user credits
 const userCredits = async (req, res) => {
   try {
     const { clerkId } = req.user;
