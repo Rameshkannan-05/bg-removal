@@ -4,6 +4,7 @@ import cors from 'cors'
 import connectDB from './configs/mongodb.js'
 import userRouter from './routes/userRoutes.js'
 import imageRouter from './routes/imageRoutes.js'
+import bodyParser from 'body-parser'
 
 // App Config
 const PORT = process.env.PORT || 4000
@@ -14,6 +15,7 @@ await connectDB()
 // Initialize Middlewares
 app.use(express.json())    // whenever we get request on this server then it will be parsed using the json method
 app.use(cors())            // Connect client that is running on different PORTs to the backend server
+app.use("/api/user/webhooks", bodyParser.raw({ type: "application/json" }));
 
 
 // API routes
